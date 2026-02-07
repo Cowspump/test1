@@ -48,7 +48,6 @@ def log_wellbeing(score: int, note: str = None, user: models.User = Depends(auth
     db.commit()
     return {"status": "success"}
 
-
 @app.get("/journal", response_model=schemas.JournalsResponse, tags=["journal"])
 def get_recent_journals(user: models.User = Depends(auth.get_current_user),
                         db: Session = Depends(database.get_db)):
