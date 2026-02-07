@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 import models, auth, database
@@ -41,14 +41,14 @@ def register(full_name: str, mail: str, password: str, role: str, db: Session = 
 # --- JOURNAL ---
 @app.post("/journal", tags=["journal"])
 def log_wellbeing(score: int, note: str = None, user: models.User = Depends(auth.get_current_user),
-                  db: Session = Depends(database.get_db)):
+                  db: Session = Depends(database.get_db), background_tasks: BackgroundTasks = BackgroundTasks()):
     if not (0 <= score <= 5):
         raise HTTPException(status_code=400, detail="Score must be 0-5")
     entry = models.Journal(wellbeing_score=score, note_text=note, user_id=user.id)
     db.add(entry)
     db.commit()
 
-    gpt_client.generate_user_summary(user.id, db)
+    background_tasks.add_task(gpt_client.generate_user_summary, user.id, db)
     return {"status": "success"}
 
 @app.get("/journal", response_model=schemas.JournalsResponse, tags=["journal"])
@@ -133,7 +133,8 @@ def delete_question(
 
 
 @app.post("/test/submit", tags=["testing"])
-def submit_test(data: schemas.TestSubmit, user: models.User = Depends(auth.get_current_user), db: Session = Depends(database.get_db)):
+def submit_test(data: schemas.TestSubmit, user: models.User = Depends(auth.get_current_user),
+                db: Session = Depends(database.get_db), background_tasks: BackgroundTasks = BackgroundTasks()):
     if user.role != models.UserRole.worker:
         raise HTTPException(status_code=403, detail="Only workers can submit tests")
 
@@ -152,7 +153,7 @@ def submit_test(data: schemas.TestSubmit, user: models.User = Depends(auth.get_c
     db.add(result)
     db.commit()
 
-    gpt_client.generate_user_summary(user.id, db)
+    background_tasks.add_task(gpt_client.generate_user_summary, user.id, db)
 
     return {"message": "Result saved", "total_score": total_score}
 
