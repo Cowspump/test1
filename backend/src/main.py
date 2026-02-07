@@ -10,7 +10,7 @@ app = FastAPI(title="Psychology & AI System")
 
 
 # --- AUTH ---
-@app.post("/token")
+@app.post("/token", tags=["auth"])
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
     user = db.query(models.User).filter(models.User.mail == form_data.username).first()
     if not user or not auth.verify_password(form_data.password, user.hashed_password):
@@ -19,7 +19,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@app.post("/register")
+@app.post("/register", tags=["auth"])
 def register(full_name: str, mail: str, password: str, role: str, db: Session = Depends(database.get_db)):
     try:
         user_role = models.UserRole(role)
@@ -38,7 +38,7 @@ def register(full_name: str, mail: str, password: str, role: str, db: Session = 
 
 
 # --- JOURNAL ---
-@app.post("/journal")
+@app.post("/journal", tags=["journal"])
 def log_wellbeing(score: int, note: str = None, user: models.User = Depends(auth.get_current_user),
                   db: Session = Depends(database.get_db)):
     if not (0 <= score <= 5):
@@ -49,8 +49,40 @@ def log_wellbeing(score: int, note: str = None, user: models.User = Depends(auth
     return {"status": "success"}
 
 
+@app.get("/journal", response_model=schemas.JournalsResponse, tags=["journal"])
+def get_recent_journals(user: models.User = Depends(auth.get_current_user),
+                        db: Session = Depends(database.get_db)):
+    journals = (
+        db.query(models.Journal)
+        .filter(models.Journal.user_id == user.id)
+        .order_by(models.Journal.created_at.desc())
+        .limit(5)
+        .all()
+    )
+    return {"message": "Journals fetched", "journals": journals}
+
+
+@app.delete("/journal/{journal_id}", tags=["journal"])
+def delete_journal(journal_id: int, user: models.User = Depends(auth.get_current_user),
+                   db: Session = Depends(database.get_db)):
+    journal = db.query(models.Journal).filter(models.Journal.id == journal_id).first()
+    if not journal:
+        raise HTTPException(status_code=404, detail="Journal entry not found")
+
+    if journal.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this journal entry")
+
+    db.delete(journal)
+    db.commit()
+    return {"message": "Journal entry deleted"}
+
+
+
+
+
+
 # --- TESTING ---
-@app.post("/test/add-question")
+@app.post("/test/add-question", tags=["testing"])
 def add_question(
         q_data: schemas.QuestionCreate,  # Используем схему
         user: models.User = Depends(auth.get_current_user),
@@ -68,7 +100,7 @@ def add_question(
     return {"message": "Вопрос успешно добавлен"}
 
 
-@app.get("/test/questions", response_model=list[schemas.QuestionOut])
+@app.get("/test/questions", response_model=schemas.QuestionsResponse, tags=["testing"])
 def get_questions(
         user: models.User = Depends(auth.get_current_user),
         db: Session = Depends(database.get_db)
@@ -77,10 +109,10 @@ def get_questions(
         raise HTTPException(status_code=403, detail="Only workers can take tests")
 
     questions = db.query(models.Question).all()
-    return questions
+    return {"message": "Questions fetched", "questions": questions}
 
 
-@app.delete("/test/question/{question_id}")
+@app.delete("/test/question/{question_id}", tags=["testing"])
 def delete_question(
         question_id: int,
         user: models.User = Depends(auth.get_current_user),
@@ -98,7 +130,7 @@ def delete_question(
     return {"message": "Вопрос успешно удалён"}
 
 
-@app.post("/test/submit")
+@app.post("/test/submit", tags=["testing"])
 def submit_test(data: schemas.TestSubmit, user: models.User = Depends(auth.get_current_user), db: Session = Depends(database.get_db)):
     if user.role != models.UserRole.worker:
         raise HTTPException(status_code=403, detail="Only workers can submit tests")
@@ -118,6 +150,22 @@ def submit_test(data: schemas.TestSubmit, user: models.User = Depends(auth.get_c
     db.add(result)
     db.commit()
     return {"message": "Result saved", "total_score": total_score}
+
+@app.get("/test/results", response_model=schemas.TestResultsResponse, tags=["testing"])
+def get_my_test_results(
+        user: models.User = Depends(auth.get_current_user),
+        db: Session = Depends(database.get_db)
+):
+    if user.role != models.UserRole.worker:
+        raise HTTPException(status_code=403, detail="Only workers can view their test results")
+
+    results = (
+        db.query(models.TestResult)
+        .filter(models.TestResult.user_id == user.id)
+        .order_by(models.TestResult.created_at.desc())
+        .all()
+    )
+    return {"message" : "Results fetched", "results": results}
 
 
 # --- AI ASSISTANT ---
