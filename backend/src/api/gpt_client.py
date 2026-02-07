@@ -105,3 +105,103 @@ def generate_user_summary(user_id: int, db: Session) -> dict:
         logger.error(f"AI summary error for user {user_id}: {e}", exc_info=True)
         db.rollback()
         return {"success": False, "error": str(e)}
+
+
+def ask_ai_assistant(user_id: int, prompt: str, db: Session) -> dict:
+    """
+    Отправляет вопрос пользователя AI-ассистенту с контекстом о состоянии пользователя.
+
+    Returns:
+        dict: {"success": bool, "response": str | None, "error": str | None}
+    """
+    try:
+        # Получаем последний summary пользователя для контекста
+        last_summary = (
+            db.query(models.AISummary)
+            .filter(models.AISummary.user_id == user_id)
+            .order_by(models.AISummary.created_at.desc())
+            .first()
+        )
+
+        # Формируем системный промпт с контекстом
+        system_prompt = """Ты профессиональный психологический ассистент.
+Твоя задача - помогать пользователям с их психологическим состоянием, давать советы и поддержку.
+Отвечай на русском языке, будь эмпатичным и профессиональным."""
+
+        if last_summary:
+            system_prompt += f"\n\nКонтекст о пользователе:\n{last_summary.summary_text}"
+
+        # Вызываем OpenAI API
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=800,
+            temperature=0.8
+        )
+
+        ai_reply = response.choices[0].message.content
+
+        # Валидация ответа
+        if not ai_reply or len(ai_reply.strip()) < 5:
+            logger.error(f"GPT returned empty or too short response for user {user_id}")
+            return {"success": False, "response": None, "error": "Invalid GPT response"}
+
+        logger.info(f"AI assistant responded to user {user_id}")
+        return {"success": True, "response": ai_reply, "error": None}
+
+    except Exception as e:
+        logger.error(f"AI assistant error for user {user_id}: {e}", exc_info=True)
+        return {"success": False, "response": None, "error": str(e)}
+
+
+def ask_ai_assistant(user_id: int, prompt: str, db: Session) -> dict:
+    """
+    Отправляет вопрос пользователя AI-ассистенту с контекстом о состоянии пользователя.
+
+    Returns:
+        dict: {"success": bool, "response": str | None, "error": str | None}
+    """
+    try:
+        # Получаем последний summary пользователя для контекста
+        last_summary = (
+            db.query(models.AISummary)
+            .filter(models.AISummary.user_id == user_id)
+            .order_by(models.AISummary.created_at.desc())
+            .first()
+        )
+
+        # Формируем системный промпт с контекстом
+        system_prompt = """Ты профессиональный психологический ассистент.
+Твоя задача - помогать пользователям с их психологическим состоянием, давать советы и поддержку.
+Отвечай на русском языке, будь эмпатичным и профессиональным."""
+
+        if last_summary:
+            system_prompt += f"\n\nКонтекст о пользователе:\n{last_summary.summary_text}"
+
+        # Вызываем OpenAI API
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=800,
+            temperature=0.8
+        )
+
+        ai_reply = response.choices[0].message.content
+
+        # Валидация ответа
+        if not ai_reply or len(ai_reply.strip()) < 5:
+            logger.error(f"GPT returned empty or too short response for user {user_id}")
+            return {"success": False, "response": None, "error": "Invalid GPT response"}
+
+        logger.info(f"AI assistant responded to user {user_id}")
+        return {"success": True, "response": ai_reply, "error": None}
+
+    except Exception as e:
+        logger.error(f"AI assistant error for user {user_id}: {e}", exc_info=True)
+        return {"success": False, "response": None, "error": str(e)}

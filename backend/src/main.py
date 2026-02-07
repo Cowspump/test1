@@ -175,15 +175,20 @@ def get_my_test_results(
 
 
 # --- AI ASSISTANT ---
-@app.post("/ai/ask")
+@app.post("/ai/ask", tags=["ai"])
 async def ai_ask(prompt: str, user: models.User = Depends(auth.get_current_user),
                  db: Session = Depends(database.get_db)):
-    # ТУТ ТВОЯ ЛОГИКА ВЫЗОВА AI (OpenAI API и т.д.)
+    # Вызываем AI-ассистента через gpt_client
+    result = gpt_client.ask_ai_assistant(user.id, prompt, db)
 
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=f"AI service error: {result['error']}")
 
-    ai_reply = f"Hello {user.full_name}, I am your AI assistant. You said: {prompt}"
+    ai_reply = result["response"]
 
+    # Логируем запрос и ответ
     log = models.AILog(user_id=user.id, request=prompt, response=ai_reply)
     db.add(log)
     db.commit()
+
     return {"response": ai_reply}
