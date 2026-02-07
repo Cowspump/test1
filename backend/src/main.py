@@ -3,6 +3,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 import models, auth, database
 import schemas
+from api import gpt_client
 
 models.Base.metadata.create_all(bind=database.engine)
 
@@ -46,6 +47,8 @@ def log_wellbeing(score: int, note: str = None, user: models.User = Depends(auth
     entry = models.Journal(wellbeing_score=score, note_text=note, user_id=user.id)
     db.add(entry)
     db.commit()
+
+    gpt_client.generate_user_summary(user.id, db)
     return {"status": "success"}
 
 @app.get("/journal", response_model=schemas.JournalsResponse, tags=["journal"])
@@ -148,6 +151,9 @@ def submit_test(data: schemas.TestSubmit, user: models.User = Depends(auth.get_c
     result = models.TestResult(total_score=total_score, user_id=user.id)
     db.add(result)
     db.commit()
+
+    gpt_client.generate_user_summary(user.id, db)
+
     return {"message": "Result saved", "total_score": total_score}
 
 @app.get("/test/results", response_model=schemas.TestResultsResponse, tags=["testing"])
@@ -172,6 +178,8 @@ def get_my_test_results(
 async def ai_ask(prompt: str, user: models.User = Depends(auth.get_current_user),
                  db: Session = Depends(database.get_db)):
     # ТУТ ТВОЯ ЛОГИКА ВЫЗОВА AI (OpenAI API и т.д.)
+
+
     ai_reply = f"Hello {user.full_name}, I am your AI assistant. You said: {prompt}"
 
     log = models.AILog(user_id=user.id, request=prompt, response=ai_reply)

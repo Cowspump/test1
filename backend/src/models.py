@@ -49,3 +49,12 @@ class AILog(Base):
     request = Column(String)
     response = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AISummary(Base):
+    __tablename__ = "ai_summaries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    summary_text = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
